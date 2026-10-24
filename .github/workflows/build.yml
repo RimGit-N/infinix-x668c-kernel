@@ -1,0 +1,73 @@
+name: Build Infinix X668C Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Kernel Image
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Build Environment
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            bison \
+            flex \
+            libelf-dev \
+            libssl-dev \
+            bc \
+            git \
+            curl \
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu
+
+      - name: Download AOSP Clang 12 (r416183b)
+        run: |
+          mkdir -p toolchain
+          git clone --depth 1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b android12-release toolchain/clang
+
+      - name: Clone Baseline Kernel Source (Unisoc 5.4.147)
+        run: |
+          git clone --depth 1 -b nokiag11plus_v1.050 https://github.com/HMD-Nokia-OSS-Kernels/android_kernel_hmd_nokiag11plus.git source_tree
+
+      - name: Copy Infinix X668C Config
+        run: |
+          cp infinix_x668c_defconfig source_tree/android/kernel5.4/arch/arm64/configs/infinix_x668c_defconfig
+
+      - name: Compile Kernel Image
+        run: |
+          cd source_tree/android/kernel5.4
+          
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          
+          CLANG_PATH="$GITHUB_WORKSPACE/toolchain/clang/clang-r416183b/bin"
+          export CC="$CLANG_PATH/clang"
+          export LD="$CLANG_PATH/ld.lld"
+          export PATH="$CLANG_PATH:$PATH"
+          
+          # Konfigurasi kernel dengan defconfig Infinix
+          make infinix_x668c_defconfig
+          
+          # Matikan error kompilasi minor jika ada warning
+          make -j$(nproc) Image
+
+      - name: Prepare Artifact
+        run: |
+          mkdir -p output
+          cp source_tree/android/kernel5.4/arch/arm64/boot/Image output/kernel
+          sha256sum output/kernel > output/kernel.sha256
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: infinix_x668c_kernel
+          path: output/kernel
