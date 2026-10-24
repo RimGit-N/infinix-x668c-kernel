@@ -24,6 +24,8 @@ jobs:
             bc \
             git \
             curl \
+            rsync \
+            python3 \
             gcc-aarch64-linux-gnu \
             binutils-aarch64-linux-gnu
 
@@ -36,29 +38,24 @@ jobs:
         run: |
           git clone --depth 1 -b nokiag11plus_v1.050 https://github.com/HMD-Nokia-OSS-Kernels/android_kernel_hmd_nokiag11plus.git source_tree
 
-      - name: Copy Infinix X668C Config
+      - name: Copy Infinix X668C Config & Patch Signing Keys
         run: |
           cp infinix_x668c_defconfig source_tree/android/kernel5.4/arch/arm64/configs/infinix_x668c_defconfig
+          cd source_tree/android/kernel5.4
+          sed -i 's/CONFIG_MODULE_SIG_KEY=.*/CONFIG_MODULE_SIG_KEY=""/g' arch/arm64/configs/infinix_x668c_defconfig
+          sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/g' arch/arm64/configs/infinix_x668c_defconfig
+          sed -i 's/CONFIG_MODULE_SIG_ALL=y/# CONFIG_MODULE_SIG_ALL is not set/g' arch/arm64/configs/infinix_x668c_defconfig
+          sed -i 's/CONFIG_MODULE_SIG_FORCE=y/# CONFIG_MODULE_SIG_FORCE is not set/g' arch/arm64/configs/infinix_x668c_defconfig
 
       - name: Compile Kernel Image
         run: |
           cd source_tree/android/kernel5.4
           
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CLANG_TRIPLE=aarch64-linux-gnu-
-          
           CLANG_PATH="$GITHUB_WORKSPACE/toolchain/clang/clang-r416183b/bin"
-          export CC="$CLANG_PATH/clang"
-          export LD="$CLANG_PATH/ld.lld"
           export PATH="$CLANG_PATH:$PATH"
           
-          # Konfigurasi kernel dengan defconfig Infinix
-          make infinix_x668c_defconfig
-          
-          # Matikan error kompilasi minor jika ada warning
-          make -j$(nproc) Image
+          make LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- infinix_x668c_defconfig
+          make -j$(nproc) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image
 
       - name: Prepare Artifact
         run: |
