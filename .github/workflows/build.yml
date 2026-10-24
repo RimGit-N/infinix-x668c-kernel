@@ -42,12 +42,12 @@ jobs:
         run: |
           cd source_tree/android/kernel5.4
           
-          # 1. Samakan string versi persis seperti kernel pabrik:
-          # 5.4.147-android12-9-ge92ce1591700-ab376
+          # 1. Samakan string versi persis seperti kernel pabrik
           sed -i 's/^EXTRAVERSION =.*/EXTRAVERSION = -android12-9-ge92ce1591700-ab376/' Makefile
           
-          # 2. Patch kernel/module.c agar semua 156 driver vendor_boot diterima tanpa ditolak
-          python3 -c "import re; p='kernel/module.c'; c=open(p).read(); c=re.sub(r'(static int check_version\([^)]+\)\s*\{)', r'\1\n\treturn 1;', c); c=c.replace('return strcmp(amagic, bmagic) == 0;', 'return 1;'); open(p, 'w').write(c)"
+          # 2. Bypass penolakan vermagic & CRC module secara bersih tanpa trigger compiler warning
+          sed -i 's/} else if (!same_magic(modmagic, vermagic, info->index.vers)) {/} else if (0 \&\& !same_magic(modmagic, vermagic, info->index.vers)) {/g' kernel/module.c
+          sed -i 's/if (!check_version(info, name, mod, crc)) {/if (0 \&\& !check_version(info, name, mod, crc)) {/g' kernel/module.c
           
           # 3. Salin config Infinix dan hapus path private key pabrik
           cp $GITHUB_WORKSPACE/infinix_x668c_defconfig arch/arm64/configs/infinix_x668c_defconfig
@@ -63,8 +63,8 @@ jobs:
           CLANG_PATH="$GITHUB_WORKSPACE/toolchain/clang/clang-r416183b/bin"
           export PATH="$CLANG_PATH:$PATH"
           
-          make LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- infinix_x668c_defconfig
-          make -j$(nproc) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image
+          make LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-Wno-error" infinix_x668c_defconfig
+          make -j$(nproc) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-Wno-error" Image
 
       - name: Prepare Artifact
         run: |
