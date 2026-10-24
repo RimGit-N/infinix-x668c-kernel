@@ -38,10 +38,19 @@ jobs:
         run: |
           git clone --depth 1 -b nokiag11plus_v1.050 https://github.com/HMD-Nokia-OSS-Kernels/android_kernel_hmd_nokiag11plus.git source_tree
 
-      - name: Copy Infinix X668C Config & Patch Signing Keys
+      - name: Match Stock Vermagic & Relax Module Checks
         run: |
-          cp infinix_x668c_defconfig source_tree/android/kernel5.4/arch/arm64/configs/infinix_x668c_defconfig
           cd source_tree/android/kernel5.4
+          
+          # 1. Samakan string versi persis seperti kernel pabrik:
+          # 5.4.147-android12-9-ge92ce1591700-ab376
+          sed -i 's/^EXTRAVERSION =.*/EXTRAVERSION = -android12-9-ge92ce1591700-ab376/' Makefile
+          
+          # 2. Patch kernel/module.c agar semua 156 driver vendor_boot diterima tanpa ditolak
+          python3 -c "import re; p='kernel/module.c'; c=open(p).read(); c=re.sub(r'(static int check_version\([^)]+\)\s*\{)', r'\1\n\treturn 1;', c); c=c.replace('return strcmp(amagic, bmagic) == 0;', 'return 1;'); open(p, 'w').write(c)"
+          
+          # 3. Salin config Infinix dan hapus path private key pabrik
+          cp $GITHUB_WORKSPACE/infinix_x668c_defconfig arch/arm64/configs/infinix_x668c_defconfig
           sed -i 's/CONFIG_MODULE_SIG_KEY=.*/CONFIG_MODULE_SIG_KEY=""/g' arch/arm64/configs/infinix_x668c_defconfig
           sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/g' arch/arm64/configs/infinix_x668c_defconfig
           sed -i 's/CONFIG_MODULE_SIG_ALL=y/# CONFIG_MODULE_SIG_ALL is not set/g' arch/arm64/configs/infinix_x668c_defconfig
